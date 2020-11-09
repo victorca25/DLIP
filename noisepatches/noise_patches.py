@@ -65,7 +65,7 @@ if __name__ == '__main__':
 
     images_path = "../BasicSR/datasets/DIV2K/HR"
     noise_patches_path = "../noise_patches"
-    mode = 'jpeg' #'normal' #'jpeg'
+    mode = 'normal' #'normal' #'jpeg'
     noise_type = 'artifact' # 'smartphone' # 'other'
 
     # https://competitions.codalab.org/competitions/22220
