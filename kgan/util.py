@@ -9,8 +9,8 @@ from scipy.signal import convolve2d
 from torch.nn import functional as F
 from scipy.ndimage import measurements, interpolation
 
-from ZSSRforKernelGAN.ZSSR import ZSSR
-
+import numpy as np
+import cv2
 
 def move2cpu(d):
     """Move data from gpu to cpu"""
@@ -37,10 +37,15 @@ def map2tensor(gray_map):
 def resize_tensor_w_kernel(im_t, k, sf=None):
     """Convolves a tensor with a given bicubic kernel according to scale factor"""
     # Expand dimensions to fit convolution: [out_channels, in_channels, k_height, k_width]
-    k = k.expand(im_t.shape[1], im_t.shape[1], k.shape[0], k.shape[1])
+    # k = k.expand(im_t.shape[1], im_t.shape[1], k.shape[0], k.shape[1])
+
+    # Expand dimensions to fit convolution: [out_channels, 1, k_height, k_width]
+    k = k.expand(im_t.shape[1], 1, k.shape[0], k.shape[1])
+
     # Calculate padding
     padding = (k.shape[-1] - 1) // 2
-    return F.conv2d(im_t, k, stride=round(1 / sf), padding=padding)
+    # return F.conv2d(im_t, k, stride=round(1 / sf), padding=padding)
+    return F.conv2d(im_t, k, stride=round(1 / sf), padding=padding, groups=im_t.shape[1])
 
 
 def read_image(path):
@@ -56,7 +61,7 @@ def rgb2gray(im):
 
 
 def swap_axis(im):
-    """Swap axis of a tensor from a 3 channel tensor to a batch of 3-single channel and vise-versa"""
+    """Swap axis of a tensor from a 3 channel tensor to a batch of 3-single channel and vice-versa"""
     return im.transpose(0, 1) if type(im) == torch.Tensor else np.moveaxis(im, 0, 1)
 
 
@@ -209,17 +214,62 @@ def kernel_shift(kernel, sf):
     return kernel
 
 
+def denorm(x, min_max=(-1.0, 1.0)):
+    '''
+        Denormalize from [-1,1] range to [0,1]
+        formula: xi' = (xi - mu)/sigma
+        Example: "out = (x + 1.0) / 2.0" for denorm 
+            range (-1,1) to (0,1)
+        for use with proper act in Generator output (ie. tanh)
+    '''
+    print(min_max)
+    out = (x - min_max[0]) / (min_max[1] - min_max[0])
+    # if isinstance(x, torch.Tensor):
+    #     return out.clamp(0, 1)
+    if isinstance(x, np.ndarray):
+        return np.clip(out, 0, 1)
+    else:
+        raise TypeError("Got unexpected object type, expected torch.Tensor or \
+        np.ndarray")
+
+
+def vis_kernel(k_2):
+    # visualization
+    #'''
+    img = k_2.copy()
+    img = denorm(img, min_max=(img.min(), img.max()))
+    scale = 16
+    newdim=(scale*img.shape[1], scale*img.shape[0]) # W, H
+    interpol = cv2.INTER_NEAREST
+    img = cv2.resize(img, newdim, interpolation = interpol)
+
+    cv2.imshow('image', img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    #'''
+
+
 def save_final_kernel(k_2, conf):
     """saves the final kernel and the analytic kernel to the results folder"""
-    sio.savemat(os.path.join(conf.output_dir_path, '%s_kernel_x2.mat' % conf.img_name), {'Kernel': k_2})
+
+    #TODO
+    # kernel visualization for debugging 
+    # vis_kernel(k_2)
+
+    with open(os.path.join(conf.output_dir_path, 'kernel_x2.npy'), 'wb+') as f:
+        np.save(f, k_2)
+    sio.savemat(os.path.join(conf.output_dir_path, 'kernel_x2.mat'), {'Kernel': k_2})
     if conf.X4:
         k_4 = analytic_kernel(k_2)
-        sio.savemat(os.path.join(conf.output_dir_path, '%s_kernel_x4.mat' % conf.img_name), {'Kernel': k_4})
+        with open(os.path.join(conf.output_dir_path, 'kernel_x4.npy'), 'wb+') as f:
+            np.save(f, k_4)
+        sio.savemat(os.path.join(conf.output_dir_path, 'kernel_x4.mat'), {'Kernel': k_4})
 
 
 def run_zssr(k_2, conf):
     """Performs ZSSR with estimated kernel for wanted scale factor"""
     if conf.do_ZSSR:
+        from ZSSRforKernelGAN.ZSSR import ZSSR
         start_time = time.time()
         print('~' * 30 + '\nRunning ZSSR X%d...' % (4 if conf.X4 else 2))
         if conf.X4:

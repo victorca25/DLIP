@@ -32,7 +32,6 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-
     def __init__(self, conf):
         super(Discriminator, self).__init__()
 

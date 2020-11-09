@@ -2,7 +2,10 @@ import matplotlib.image as img
 from ZSSRforKernelGAN.zssr_configs import Config
 from ZSSRforKernelGAN.zssr_utils import *
 import numpy as np
-import tensorflow as tf
+#import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+
 
 
 class ZSSR:
@@ -135,7 +138,8 @@ class ZSSR:
     def build_network(self, meta):
         with self.model.as_default():
             # Learning rate tensor
-            self.learning_rate_t = tf.placeholder(tf.float32, name='learning_rate')
+            #self.learning_rate_t = tf.placeholder(tf.float32, name='learning_rate')
+            self.learning_rate_t = tf.compat.v1.placeholder(tf.float32, name='learning_rate')
 
             # Input image
             self.lr_son_t = tf.placeholder(tf.float32, name='lr_son')

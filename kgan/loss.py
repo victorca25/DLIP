@@ -57,7 +57,11 @@ class SumOfWeightsLoss(nn.Module):
         self.loss = nn.L1Loss()
 
     def forward(self, kernel):
-        return self.loss(torch.ones(1).to(kernel.device), torch.sum(kernel))
+        #TODO
+        #print('SumOfWeightsLoss: ', torch.ones(1).to(kernel.device).shape, torch.sum(kernel).shape)
+        #return self.loss(torch.ones(1).to(kernel.device), torch.sum(kernel))
+        #TODO check: this removes the warning
+        return self.loss(torch.ones(1).to(kernel.device), torch.sum(kernel).unsqueeze(-1))
 
 
 class CentralizedLoss(nn.Module):
@@ -67,14 +71,19 @@ class CentralizedLoss(nn.Module):
         super(CentralizedLoss, self).__init__()
         self.indices = Variable(torch.arange(0., float(k_size)).cuda(), requires_grad=False)
         wanted_center_of_mass = k_size // 2 + 0.5 * (int(1 / scale_factor) - k_size % 2)
-        self.center = Variable(torch.FloatTensor([wanted_center_of_mass, wanted_center_of_mass]).cuda(), requires_grad=False)
+        #self.center = Variable(torch.FloatTensor([wanted_center_of_mass, wanted_center_of_mass]).cuda(), requires_grad=False)
+        #TODO check: this removes the warning
+        self.center = Variable(torch.FloatTensor([wanted_center_of_mass, wanted_center_of_mass]).cuda(), requires_grad=False).unsqueeze(-1)
         self.loss = nn.MSELoss()
 
     def forward(self, kernel):
         """Return the loss over the distance of center of mass from kernel center """
         r_sum, c_sum = torch.sum(kernel, dim=1).reshape(1, -1), torch.sum(kernel, dim=0).reshape(1, -1)
+        #TODO
+        #print('CentralizedLoss: ',torch.stack((torch.matmul(r_sum, self.indices) / torch.sum(kernel),
+        #                              torch.matmul(c_sum, self.indices) / torch.sum(kernel))).shape , self.center.shape)
         return self.loss(torch.stack((torch.matmul(r_sum, self.indices) / torch.sum(kernel),
-                                      torch.matmul(c_sum, self.indices) / torch.sum(kernel))), self.center)
+                                      (torch.matmul(c_sum, self.indices) / torch.sum(kernel)))), self.center)
 
 
 class BoundariesLoss(nn.Module):
@@ -83,10 +92,17 @@ class BoundariesLoss(nn.Module):
     def __init__(self, k_size):
         super(BoundariesLoss, self).__init__()
         self.mask = map2tensor(create_penalty_mask(k_size, 30))
-        self.zero_label = Variable(torch.zeros(k_size).cuda(), requires_grad=False)
+        #self.zero_label = Variable(torch.zeros(k_size).cuda(), requires_grad=False)
+        #TODO check: this removes the warning, but I think results are being slightly altered (not sure if there's some stochatic element)
+        # note: after checking, the produced kernels are random, even for the same image, so results can always vary, independently from this change
+        self.zero_label = Variable(torch.zeros(k_size, k_size).cuda(), requires_grad=False).unsqueeze(0).unsqueeze(0)
         self.loss = nn.L1Loss()
 
     def forward(self, kernel):
+        #TODO Fixed?
+        #print('BoundariesLoss: ', (kernel * self.mask).shape, self.zero_label.shape)
+        #return self.loss(kernel * self.mask, self.zero_label)
+        #return self.loss(kernel * self.mask, self.zero_label.view(-1, *kernel.size()))
         return self.loss(kernel * self.mask, self.zero_label)
 
 
@@ -98,4 +114,6 @@ class SparsityLoss(nn.Module):
         self.loss = nn.L1Loss()
 
     def forward(self, kernel):
+        #TODO Good!
+        #print('SparsityLoss: ', (torch.abs(kernel) ** self.power).shape, torch.zeros_like(kernel).shape)
         return self.loss(torch.abs(kernel) ** self.power, torch.zeros_like(kernel))
